@@ -1,0 +1,46 @@
+# Wi-Fi robot
+
+A wi-fi controlled robot with live video feed.
+
+![photo][documents/photo.jpg]
+
+This was proposed and directed by myself over a year at the Polytech Paris-Sud school, but I could not have completed the work alone.
+Our team was composed of [Jean-Marc Abbas](https://github.com/Jjmarco) (IT) and Charles Leroux (EE).
+
+This project also uses a number of free programs, the authors of which we greatly thank.
+
+Videos, photos and detailed documents (in French) are available in the `documents/` directory.
+
+
+# Usage
+
+## Hardware
+
+You'll need :
+
+- A Raspberry Pi 3 (we thought the extra computing power would be helpful)
+- An official Raspberry camera
+- 2x Phone power banks, rated 3A (the RPi3 won't work reliably with less)
+- A robot chassis. To save time, we used a turnkey chinese chassis "Tchang DD1-1" bought on e-bay for 40€. It included motors, transistors for control, speed sensors (unused) and PWM.
+- A whole bunch of cables and a creative spirit
+
+The RPi will send commands through its GPIO ; most complicated things are, in our case, either handled software-side or by our chassis.
+
+## Software
+
+You'll need :
+
+- A fresh Raspbian install (Debian being the best distro anyway)
+- the `picamera` utility
+- the ever-useful FFMpeg (and NOT `avconv`, which briefly replaced it by default on Debian for doubtful reasons)
+- Python 3
+- the `RPi.GPIO` library
+- The [Tornado](http://www.tornadoweb.org/en/stable/) web server
+- The [JSmpeg](https://github.com/phoboslab/jsmpeg) decoder
+- A modern web browser on the client end (>2011 should do).
+
+Potentially, everything could be done in Python. But it's simpler to manage the different components through the console, hence the bash script.
+
+Essentially, the idea is to get the (x264) output from picamera, reencode it to MPEG1 with FFMpeg, and pass that to Tornado. Tornado (being non-blocking and all) will open two WebSockets (one for the video feed and one for the commands) with the client, connected via wi-fi.
+
+The simplest way to use all this is to put the files in a user's home, remotely SSH, and execute the script, maybe with something like nohup. It would be cleaner to do with automatically on boot (and why not to also start a wi-fi hotspot for clients to connect to).
