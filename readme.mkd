@@ -2,14 +2,14 @@
 
 A wi-fi controlled robot with live video feed.
 
-![photo][documents/photo.jpg]
+![photo](documents/photo.jpg)
 
 This was proposed and directed by myself over a year at the Polytech Paris-Sud school, but I could not have completed the work alone.
 Our team was composed of [Jean-Marc Abbas](https://github.com/Jjmarco) (IT) and Charles Leroux (EE).
 
 This project also uses a number of free programs, the authors of which we greatly thank.
 
-Videos, photos and detailed documents (in French) are available in the `documents/` directory.
+A [demo video](https://drive.google.com/open?id=0B1WZVH0epmmNcWpHbFhlUFhHWHM), photos and detailed documents (in French) are available in the `documents/` directory.
 
 
 # Usage
