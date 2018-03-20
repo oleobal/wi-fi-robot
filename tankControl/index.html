@@ -1,0 +1,311 @@
+
+<html>
+<head>
+
+<meta charset="utf-8">
+
+<style type="text/css">
+
+body {
+	font-family: monospace, Consolas;
+}
+
+h1, h2 {
+	 text-align: center;
+}
+
+#controlpad, #joystick {
+	text-align: center;
+	background-color: gray;
+	border-radius: 3px;
+	padding: 10px;
+	margin: 0 auto;
+	width: 30%;
+	box-shadow: 0px 2px 5px 1px rgba(0, 0, 0, 0.7);
+	
+}
+
+button {
+	background-color: black;
+	color: white;
+	border: 0;
+	border-radius: 5px;
+	font-size: 2em;
+	width: 20%;
+	margin: 5px;
+}
+
+#pad {
+	--radius: 60%;
+	width: var(--radius);
+	height: var(--radius);
+	background-color: red;
+	--active-color: yellow;
+	border-radius: 50%;
+	top: calc((100% - var(--radius))/2);
+	left: calc((100% - var(--radius))/2);
+	position: relative;
+}
+
+#circle {
+	border-radius: 50%;
+	width: 150;
+	height: 150;
+	border: 1px solid black;
+	margin: 25 auto;
+}
+
+#response {
+	width: 30%;
+	margin: 0 auto;
+}
+
+</style>
+
+<script type="text/javascript">
+
+// Create new WebSocket. Socket adress must be a complete URL starting with 'ws://'.
+var socket = new WebSocket("ws://{{ request.host }}/socket");
+
+// Function called whenever server sends a message to client
+socket.onmessage = function(e)
+{
+	document.querySelector("#response").innerHTML = "Commande reçue: " + e.data + "<br>";
+}
+
+socket.onopen = function(e)
+{
+	document.querySelector("#response").innerHTML = "Connecté au véhicule.";
+}
+
+socket.onerror = function(e)
+{
+	document.querySelector("#response").innerHTML = "<span style='color: red;'>Erreur de connexion au véhicule.</span>";
+}
+
+var keys = {
+	37: false,
+	38: false,
+	39: false,
+	40: false
+};
+
+// fonction qui met à jour les ratios moteurs en fonction des touches pressées
+function updateKeysStatus()
+{
+	var upOrDown = keys[38] - keys[40];
+	var leftOrRight = keys[39] - keys[37];
+	
+	// on calcule un angle en fonction des touches pressées
+	// la magnitude ici est toujours 1, sauf si aucune touche n'est pressée
+	if(upOrDown != 0 || leftOrRight != 0)
+		// atan2, la meilleure fonction mathématique de l'univers
+		computeMotorSpeed(-Math.atan2(upOrDown, leftOrRight), 1);
+	else
+		computeMotorSpeed(0, 0);
+}
+
+var origin;
+var capture = false;
+
+var pad;
+var padRect;
+var circle;
+var circleRect;
+
+function padStart(e)
+{
+	if(e && e.target && e.target.id != "pad") return;
+	e.preventDefault();  // annule toute autre action de la souris
+	e.stopPropagation(); // nécessaire pour éviter de défiler la page sur certains navigateurs mobile
+	
+	// origines différentes si contrôle à la souris our contrôle au touché
+	if(e.changedTouches)
+		origin = {x: e.changedTouches[0].clientX,
+				  y: e.changedTouches[0].clientY};
+	else
+		origin = {x: e.clientX, y: e.clientY};
+	
+	capture = true;
+	
+	pad = e.target;
+	circle = document.querySelector("#circle");
+	padRect = pad.getBoundingClientRect();
+	circleRect = circle.getBoundingClientRect();
+	
+	// on retient la position neutre
+	neutralPosX = pad.style.left;
+	neutralPosY = pad.style.top;
+	
+	// on change la couleur du pad
+	pad.style.backgroundColor = window.getComputedStyle(pad).getPropertyValue("--active-color");
+}
+
+// En fonction du déplacement de la souris/du doigt de l'origine, on calcule une magnitude et un angle avec lequel on va pouvoir dériver des ratios pour les moteurs
+function padMove(e)
+{
+	if(capture)
+	{
+		e.preventDefault();
+		e.stopPropagation();
+		
+		// position de la souris/du doigt
+		var posX = e.changedTouches ? e.changedTouches[0].clientX : e.clientX;
+		var posY = e.changedTouches ? e.changedTouches[0].clientY : e.clientY;
+		
+		// distance par rapport à l'origine
+		var dX = posX - origin.x;
+		var dY = posY - origin.y;
+		
+		// calcule de la magnitude et de l'angle
+		var norm = Math.min(Math.sqrt(dX*dX + dY*dY), circleRect.width/2);
+		var angle = Math.atan2(dY, dX);
+		
+		// mise à jour de la position du pad pour un repère visuel
+		pad.style.left = Math.round(0.8*norm*Math.cos(angle)) + circleRect.width/2 -padRect.width/2;
+		pad.style.top = Math.round(0.8*norm*Math.sin(angle)) + circleRect.height/2 - padRect.height/2;
+		
+		// calcul des ratios à partir de l'angle et de la magnitude
+		computeMotorSpeed(angle, norm/(circleRect.width/2));
+	}
+}
+
+function padStop(e)
+{
+	if(capture)
+	{
+		e.preventDefault();
+		e.stopPropagation();
+		capture = false;
+		
+		// réinitalisation de la position et couleur du pad
+		pad.style.backgroundColor = "red";
+		pad.style.left = neutralPosX;
+		pad.style.top  = neutralPosY;
+		
+		// on envoie un évènement avec des ratios nuls pour arrêter les moteurs
+		sendRatioChangeEvent(0, 0);
+	}
+}
+
+/* Calcul le ratio de chaque moteur en fonction de l'angle et la magnitude obtenue du joystick ou des touches directionelles
+ * Envoi un évènement contenant les nouveaux ratios
+ */
+function computeMotorSpeed(angle, magnitude)
+{
+	var cos = Math.cos(angle)
+	var sin = Math.sin(angle)
+
+	// les ratios initiaux sont détermiés en fonction de la directio choisie (gauche ou droite)
+	var leftMotorRatio = cos < 0 ? 1 + cos : 1;
+	var rightMotorRatio = cos < 0 ? 1 : 1 - cos;
+
+	// on module les ratios avec la magnitude (dépend de la position du joystick, toujours 1 pour les touches directionelles)
+	leftMotorRatio *= magnitude;
+	rightMotorRatio *= magnitude;
+
+	// inverser les ratios en fonction du sens de déplacement (avant ou arrière)
+	if (Math.abs(sin) > 0) {
+		leftMotorRatio *= -Math.sign(sin);
+		rightMotorRatio *= -Math.sign(sin);
+	}
+
+	sendRatioChangeEvent(leftMotorRatio, rightMotorRatio);
+}
+
+// Permet d'envoyer un évènement personnalisé contenant de nouveaux ratios pour les moteurs
+function sendRatioChangeEvent(left, right)
+{
+	var newRatiosEvent = new Event("ratiochange");
+	newRatiosEvent.left = left;
+	newRatiosEvent.right = right;
+	window.dispatchEvent(newRatiosEvent);
+}
+
+// Support for arrow keys as well
+window.addEventListener("keydown", function(e)
+{
+	e.preventDefault();
+	if(e.keyCode in keys) keys[e.keyCode] = true;
+	updateKeysStatus();
+});
+
+window.addEventListener("keyup", function(e)
+{
+	e.preventDefault();
+	if(e.keyCode in keys) keys[e.keyCode] = false;
+	updateKeysStatus();
+});
+
+// on arrête les moteurs si la page perd le focus, par sécurité
+window.addEventListener("blur", function(e)
+{
+	socket.send(JSON.stringify({left: 0, right: 0}));
+});
+
+var previousLeft = 0;
+var previousRight = 0;
+var granularity = 0.1;
+
+window.addEventListener("ratiochange", function(e)
+{
+	// on compare les nouvelles valeurs aux précédentes pour augmenter la granularité des envois
+	// cela permet d'éviter d'envoyer trop de requêtes à la suite
+	if(Math.abs(e.left - previousLeft) > granularity  || Math.abs(e.right - previousRight) > granularity )
+	{
+		socket.send(JSON.stringify({left: Math.round(100*e.left), right: Math.round(100*e.right)}));
+		previousLeft = e.left;
+		previousRight = e.right;
+	}
+});
+
+// support de la souris mais aussi des écrans tactiles
+
+window.addEventListener("mousedown", padStart);
+window.addEventListener("touchstart", padStart);
+
+window.addEventListener("mousemove", padMove);
+window.addEventListener("touchmove", padMove);
+
+window.addEventListener("mouseup", padStop);
+window.addEventListener("touchend", padStop);
+
+</script>
+
+
+<script type="text/javascript" src="jsmpeg.min.js"></script>
+
+<title>Panneau de contrôle</title>
+
+</head>
+
+<body>
+
+<h2>Panneau de contrôle</h2>
+
+<center><div id="player" class="jsmpeg" data-url="ws://{{ request.host }}/video" style="width: 40%; margin: auto;"></div></center>
+<br>
+<div id="joystick">
+	<div id="circle">
+		<div id="pad"></div>
+	</div>
+</div>
+<br>
+<!-- Gotta rework that control pad
+<div id="controlpad">
+	<button onclick="sendCommand(38)">▲</button>
+	<br>
+	<button onclick="sendCommand(37)">◀</button>
+	&nbsp;&nbsp;&nbsp;
+	<button onclick="sendCommand(39)">▶</button>
+	<br>
+	<button onclick="sendCommand(40)">▼</button>
+</div>
+-->
+
+<br>
+
+<div id="response"></div>
+
+</body>
+</html>
