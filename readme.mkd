@@ -5,7 +5,7 @@ A wi-fi controlled robot with live video feed.
 ![photo](documents/photo.jpg)
 
 This was proposed and directed by myself over a year at the Polytech Paris-Sud school, but I could not have completed the work alone.
-Our team was composed of [Jean-Marc Abbas](https://github.com/Jjmarco) (IT) and Charles Leroux (EE).
+Our team was composed of [Jean-Marc Abbas](https://github.com/Jjmarco) (IT), Charles Leroux (EE), and [myself](https://github.com/oleobal) (IT).
 
 This project also uses a number of free programs, the authors of which we greatly thank.
 
@@ -41,6 +41,6 @@ You'll need :
 
 Potentially, everything could be done in Python. But it's simpler to manage the different components through the console, hence the bash script.
 
-Essentially, the idea is to get the (x264) output from picamera, reencode it to MPEG1 with FFMpeg, and pass that to Tornado. Tornado (being non-blocking and all) will open two WebSockets (one for the video feed and one for the commands) with the client, connected via wi-fi.
+Essentially, the idea is to get the (x264) output from picamera, reencode it to MPEG1 with FFMpeg, and pass that to Tornado. Tornado (being non-blocking and all) will open two WebSockets (one for the video feed and one for the commands) with the client, connected via wi-fi. This works with any number of clients (although there is currently no special mechanism, so the robot will just execute all commands, wherever they come from).
 
 The simplest way to use all this is to put the files in a user's home, remotely SSH, and execute the script, maybe with something like nohup. It would be cleaner to do with automatically on boot (and why not to also start a wi-fi hotspot for clients to connect to).
